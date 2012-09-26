@@ -23,8 +23,9 @@ public class IceTool {
 	public static String archiveName = "";
 	public static String accessKey = "";
 	public static String secretKey =""; 
-	public static String upload = "";
-
+	public static boolean upload = false;
+	public static boolean nocache = false;
+    private static final String CACHE_FILE_NAME = "icetool.properties";
 	
 	public static Options options;
 
@@ -45,7 +46,10 @@ public class IceTool {
 		
 		parseCommandLine(args);
 				
-		writeCachedPropertiesFile();
+		// cache credentials only if allowed and the credentials were informed
+		if ((nocache == false) && !accessKey.equals("") &&  !secretKey.equals("") && !vaultName.equals("")){
+		   writeCachedPropertiesFile();
+		}
 				
 		GlacierUpload.Do(accessKey,secretKey,vaultName,archiveName);
 		
@@ -73,12 +77,20 @@ public class IceTool {
 						.withDescription("AWS secret key")
 						.create("secretkey");
 				
+				Option upload = new Option( "upload",
+                        "upload file to a Glaciar safe" );
 				
+				Option nocache = new Option( "nocache",
+                        "does not cache  AWS credentials and vault name" );
+			
 				//create  options
+				options.addOption( upload );
+				options.addOption( nocache );
 				options.addOption( vaultname );
 				options.addOption( archivename );
 				options.addOption( accesskey );
 				options.addOption( secretkey );
+				
 
 	}
 	private static void parseCommandLine(String[] args){
@@ -93,35 +105,47 @@ public class IceTool {
 	    	// parse the command line arguments
 	        CommandLine line = parser.parse( options, args );
 	    
-	        // has the  argument been passed?
-		    if( line.hasOption( "vaultname" ) ) {
+	        // vault, accesskey and secretkey are aleays required by glaciar
+		    if( line.hasOption( "vaultname") && vaultName.equals("") ) {
 		        vaultName = line.getOptionValue( "vaultname" ).toString().trim();
-		    }else if (vaultName.isEmpty()){
+		    }
+		    if (vaultName.isEmpty()){
 		    	formatter.printHelp( "icetool", options );
 		    	System.exit(10);
 		    }
 		    
-		    if( line.hasOption( "archivename" ) ) {
-		        archiveName = line.getOptionValue( "archivename" ).toString().trim();
-		    }else{
-		    	formatter.printHelp( "icetool", options );
-		    	System.exit(10);
-		    }
-		    
-		    if( line.hasOption( "accesskey" ) ) {
+		    if( line.hasOption( "accesskey" ) && accessKey.equals("")) {
 		        accessKey = line.getOptionValue( "accesskey" ).toString().trim();
-		    }else if (vaultName.isEmpty()){
+		    }
+		    if (vaultName.isEmpty()){
 		    	formatter.printHelp( "icetool", options );
 		    	System.exit(10);
 		    }
 		    
-		    if( line.hasOption( "secretkey" ) ) {
+		    if( line.hasOption( "secretkey" ) && secretKey.equals("")) {
 		        secretKey = line.getOptionValue( "secretley" ).toString().trim();
-		    }else if (!vaultName.isEmpty()){
+		    }
+		    if (!vaultName.isEmpty()){
 		    	formatter.printHelp( "icetool", options );
 		    	System.exit(10);
 		    }
 
+		    if( line.hasOption( "nocache" ) ) {
+		    	nocache = true;
+		    }
+		    
+		    //upload command checks for archive name because it requires an archive to upload 
+		    if( line.hasOption( "upload" ) ) {
+		        
+		    	if( line.hasOption( "archivename" ) ) {
+			        archiveName = line.getOptionValue( "archivename" ).toString().trim();
+			    }else{
+			    	System.out.println("upload command requires a archive name");
+			    	formatter.printHelp( "icetool", options );
+			    	System.exit(10);
+			    }
+		    }
+	    
 	    }
 	    catch( ParseException exp ) {
 	        // oops, something went wrong
@@ -138,7 +162,7 @@ public class IceTool {
 			properties.setProperty("secretKey", secretKey);
 			properties.setProperty("vaultName", vaultName);
 
-			File file = new File("icetool.properties");
+			File file = new File(CACHE_FILE_NAME);
 			FileOutputStream fileOut = new FileOutputStream(file);
 			properties.store(fileOut, "IceTool cached parameters");
 			fileOut.close();
@@ -150,25 +174,27 @@ public class IceTool {
 	}
 	public static void readCachedPropertiesFile() {
 		try {
-			File file = new File("test.properties");
-			FileInputStream fileInput = new FileInputStream(file);
-			Properties properties = new Properties();
-			properties.load(fileInput);
-			fileInput.close();
-
-			properties.setProperty("accessKey", accessKey);
-			properties.setProperty("secretKey", secretKey);
-			properties.setProperty("vaultName", vaultName);
-			
-			Enumeration enuKeys = properties.keys();
-			while (enuKeys.hasMoreElements()) {
-				String key = (String) enuKeys.nextElement();
-				if (key =="accessKey"){
-					accessKey = properties.getProperty(key);
-				} else if (key =="secretKey"){
-					secretKey = properties.getProperty(key);
-				} else if (key =="vaultName"){
-					vaultName = properties.getProperty(key);
+			if (fileExixts(CACHE_FILE_NAME)){
+				File file = new File("test.properties");
+				FileInputStream fileInput = new FileInputStream(file);
+				Properties properties = new Properties();
+				properties.load(fileInput);
+				fileInput.close();
+	
+				properties.setProperty("accessKey", accessKey);
+				properties.setProperty("secretKey", secretKey);
+				properties.setProperty("vaultName", vaultName);
+				
+				Enumeration enuKeys = properties.keys();
+				while (enuKeys.hasMoreElements()) {
+					String key = (String) enuKeys.nextElement();
+					if (key =="accessKey"){
+						accessKey = properties.getProperty(key);
+					} else if (key =="secretKey"){
+						secretKey = properties.getProperty(key);
+					} else if (key =="vaultName"){
+						vaultName = properties.getProperty(key);
+					}
 				}
 			}
 		} catch (FileNotFoundException e) {
@@ -177,4 +203,9 @@ public class IceTool {
 			e.printStackTrace();
 		}
 	}
+	public static boolean fileExixts(String file){
+		File f = new File(file);
+		return f.exists();
+	}
+
 }
